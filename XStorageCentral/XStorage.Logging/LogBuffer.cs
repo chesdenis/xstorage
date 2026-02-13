@@ -53,7 +53,7 @@ public abstract class LogBuffer : IDisposable
 
     protected abstract void Flush(List<string> logs);
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         if(Interlocked.Exchange(ref _disposed, true))
             return;
