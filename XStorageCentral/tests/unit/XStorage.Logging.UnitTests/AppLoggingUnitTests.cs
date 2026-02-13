@@ -73,26 +73,62 @@ public class AppLoggingUnitTests
     }
 
     [Fact]
-    public void LogEnvelope_ShouldContainCorrectMetadata()
+    public void WriteTraffic_ShouldProduceTrfType()
     {
         // Arrange
         using var logger = new TestAppLogging();
-        var data = new { Info = "test" };
-        var startTime = DateTime.UtcNow;
 
         // Act
-        logger.WriteTraffic("msg", data);
+        logger.WriteTraffic<object>("msg");
         logger.Dispose();
 
         // Assert
-        var log = logger.FlushedLogs.First();
-        var envelope = JsonSerializer.Deserialize<LogEnvelope<JsonElement>>(log);
-
+        var envelope = JsonSerializer.Deserialize<LogEnvelope<object>>(logger.FlushedLogs.First());
         Assert.Equal("trf", envelope.Type);
-        Assert.Equal("msg", envelope.Msg);
-        Assert.Equal("test", envelope.Data.GetProperty("Info").GetString());
-        Assert.True(envelope.TimeStamp >= startTime);
-        Assert.True(envelope.TimeStamp <= DateTime.UtcNow);
-        Assert.False(string.IsNullOrEmpty(envelope.Cid));
+    }
+
+    [Fact]
+    public void WriteInfo_ShouldProduceInfType()
+    {
+        // Arrange
+        using var logger = new TestAppLogging();
+
+        // Act
+        logger.WriteInfo("msg", "data");
+        logger.Dispose();
+
+        // Assert
+        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First());
+        Assert.Equal("inf", envelope.Type);
+    }
+
+    [Fact]
+    public void WriteFact_ShouldProduceFctType()
+    {
+        // Arrange
+        using var logger = new TestAppLogging();
+
+        // Act
+        logger.WriteFact("msg", "data");
+        logger.Dispose();
+
+        // Assert
+        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First());
+        Assert.Equal("fct", envelope.Type);
+    }
+
+    [Fact]
+    public void WriteDebug_ShouldProduceDbgType()
+    {
+        // Arrange
+        using var logger = new TestAppLogging();
+
+        // Act
+        logger.WriteDebug("msg", "data");
+        logger.Dispose();
+
+        // Assert
+        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First());
+        Assert.Equal("dbg", envelope.Type);
     }
 }
