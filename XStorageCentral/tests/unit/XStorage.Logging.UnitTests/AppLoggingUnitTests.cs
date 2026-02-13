@@ -8,12 +8,12 @@ public class AppLoggingUnitTests
 {
     private class TestAppLogging : AppLogging
     {
-        public ConcurrentBag<string> FlushedLogs { get; } = new();
+        public ConcurrentBag<LogMessage> FlushedLogs { get; } = new();
         public ManualResetEventSlim FlushEvent { get; } = new(false);
         public int ExpectedLogs { get; set; }
         private int _totalLogsFlushed;
 
-        protected override void Flush(List<string> logs)
+        protected override void Flush(List<LogMessage> logs)
         {
             foreach (var log in logs)
             {
@@ -43,7 +43,7 @@ public class AppLoggingUnitTests
 
         // Assert
         var envelopes = logger.FlushedLogs
-            .Select(log => JsonSerializer.Deserialize<LogEnvelope<object>>(log))
+            .Select(log => JsonSerializer.Deserialize<LogEnvelope<LogMessage>>(log.Message))
             .ToList();
 
         Assert.Equal(3, envelopes.Count);
@@ -66,8 +66,8 @@ public class AppLoggingUnitTests
         logger2.Dispose();
 
         // Assert
-        var env1 = JsonSerializer.Deserialize<LogEnvelope<int>>(logger1.FlushedLogs.First());
-        var env2 = JsonSerializer.Deserialize<LogEnvelope<int>>(logger2.FlushedLogs.First());
+        var env1 = JsonSerializer.Deserialize<LogEnvelope<int>>(logger1.FlushedLogs.First().Message);
+        var env2 = JsonSerializer.Deserialize<LogEnvelope<int>>(logger2.FlushedLogs.First().Message);
 
         Assert.NotEqual(env1.Cid, env2.Cid);
     }
@@ -83,7 +83,7 @@ public class AppLoggingUnitTests
         logger.Dispose();
 
         // Assert
-        var envelope = JsonSerializer.Deserialize<LogEnvelope<object>>(logger.FlushedLogs.First());
+        var envelope = JsonSerializer.Deserialize<LogEnvelope<object>>(logger.FlushedLogs.First().Message);
         Assert.Equal("trf", envelope.Type);
     }
 
@@ -98,7 +98,7 @@ public class AppLoggingUnitTests
         logger.Dispose();
 
         // Assert
-        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First());
+        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First().Message);
         Assert.Equal("inf", envelope.Type);
     }
 
@@ -113,7 +113,7 @@ public class AppLoggingUnitTests
         logger.Dispose();
 
         // Assert
-        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First());
+        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First().Message);
         Assert.Equal("fct", envelope.Type);
     }
 
@@ -128,7 +128,7 @@ public class AppLoggingUnitTests
         logger.Dispose();
 
         // Assert
-        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First());
+        var envelope = JsonSerializer.Deserialize<LogEnvelope<string>>(logger.FlushedLogs.First().Message);
         Assert.Equal("dbg", envelope.Type);
     }
 }

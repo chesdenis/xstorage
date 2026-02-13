@@ -7,15 +7,15 @@ public class LogBufferUnitTests
 {
     private class TestLogBuffer : LogBuffer
     {
-        public ConcurrentBag<List<string>> Batches { get; } = new();
-        public List<string> AllLogs => Batches.SelectMany(x => x).ToList();
+        public ConcurrentBag<List<LogMessage>> Batches { get; } = new();
+        public List<LogMessage> AllLogs => Batches.SelectMany(x => x).ToList();
         public ManualResetEventSlim FlushEvent { get; } = new(false);
         public int ExpectedLogs { get; set; }
         private int _totalLogsFlushed;
 
-        public void CallAdd(string message) => Add(message);
+        public void CallAdd(string message, string type) => Add(message, type);
 
-        protected override void Flush(List<string> logs)
+        protected override void Flush(List<LogMessage> logs)
         {
             Batches.Add([..logs]);
             var current = Interlocked.Add(ref _totalLogsFlushed, logs.Count);
@@ -37,7 +37,7 @@ public class LogBufferUnitTests
         // Act
         for (int i = 0; i < batchSize; i++)
         {
-            buffer.CallAdd($"msg {i}");
+            buffer.CallAdd($"msg {i}", "inf");
         }
 
         // Assert
@@ -58,7 +58,7 @@ public class LogBufferUnitTests
         {
             for (int i = 0; i < count; i++)
             {
-                buffer.CallAdd($"msg {i}");
+                buffer.CallAdd($"msg {i}","inf");
             }
         } // Dispose called here
 
@@ -74,7 +74,7 @@ public class LogBufferUnitTests
         buffer.Dispose();
 
         // Act & Assert
-        Assert.Throws<ObjectDisposedException>(() => buffer.CallAdd("msg"));
+        Assert.Throws<ObjectDisposedException>(() => buffer.CallAdd("msg","inf"));
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class LogBufferUnitTests
         {
             for (int i = 0; i < logsPerThread; i++)
             {
-                buffer.CallAdd($"t{t} msg {i}");
+                buffer.CallAdd($"t{t} msg {i}", "inf");
             }
         }));
 
@@ -117,7 +117,7 @@ public class LogBufferUnitTests
         {
             for (int i = 0; i < totalLogs; i++)
             {
-                buffer.CallAdd($"msg {i}");
+                buffer.CallAdd($"msg {i}","inf");
             }
         });
 

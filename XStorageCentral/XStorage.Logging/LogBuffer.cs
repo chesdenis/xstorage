@@ -2,10 +2,11 @@ using System.Collections.Concurrent;
 
 namespace XStorage.Logging;
 
+public record LogMessage(string Message, string Type);
 
 public abstract class LogBuffer : IDisposable
 {
-    private readonly BlockingCollection<string> _queue = new(50000);
+    private readonly BlockingCollection<LogMessage> _queue = new(50000);
     private const int BatchSize = 10000;
     private readonly Task _flushingTask;
     private volatile bool _disposed;
@@ -16,7 +17,7 @@ public abstract class LogBuffer : IDisposable
     }
 
 
-    protected void Add(string message)
+    protected void Add(string message, string type)
     {
         if (_disposed)
         {
@@ -25,7 +26,7 @@ public abstract class LogBuffer : IDisposable
 
         try
         {
-            _queue.Add(message);
+            _queue.Add(new LogMessage(message, type));
         }
         catch (InvalidOperationException)
         {
@@ -35,7 +36,7 @@ public abstract class LogBuffer : IDisposable
 
     private void ProcessQueue()
     {
-        var batch = new List<string>(BatchSize);
+        var batch = new List<LogMessage>(BatchSize);
         foreach (var log in _queue.GetConsumingEnumerable())
         {
             batch.Add(log);
@@ -51,7 +52,7 @@ public abstract class LogBuffer : IDisposable
             Flush(batch);
     }
 
-    protected abstract void Flush(List<string> logs);
+    protected abstract void Flush(List<LogMessage> logs);
 
     public virtual void Dispose()
     {

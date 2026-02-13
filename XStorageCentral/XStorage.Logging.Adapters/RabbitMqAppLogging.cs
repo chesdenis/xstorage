@@ -49,24 +49,34 @@ public class RabbitMqAppLogging : AppLogging
         })
         .Build();
     
-    protected override void Flush(List<string> logs)
+    protected override void Flush(List<LogMessage> logs)
     {
         if (logs.Count == 0) return;
 
+        var processedIndex = 0;
+        var logsSnapshot = logs.ToArray();
+        
         _resiliencePipeline.ExecuteAsync(async (state, ct) =>
         {
             var channel = await state.This.GetChannelAsync();
-            
-            foreach (var log in state.Logs)
+
+            while (processedIndex < logsSnapshot.Length)
             {
-                var body = Encoding.UTF8.GetBytes(log);
+                var message = logsSnapshot[processedIndex].Message;
+                var type = logsSnapshot[processedIndex].Type;
+                
+                var body = Encoding.UTF8.GetBytes(message);
+                
                 await channel.BasicPublishAsync(
                     exchange: state.This._exchangeName,
-                    routingKey: string.Empty,
+                    routingKey: type,
                     mandatory: false,
                     body: body,
                     cancellationToken: ct);
+                
+                processedIndex++;
             }
+
         }, (This: this, Logs: logs)).ConfigureAwait(false).GetAwaiter().GetResult();
     }
 

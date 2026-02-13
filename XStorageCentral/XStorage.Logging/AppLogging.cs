@@ -42,6 +42,6 @@ public abstract class AppLogging : LogBuffer, IAppLogging
             Cid = _correlationId
         };
 
-        Add(JsonSerializer.Serialize(entry));
+        Add(JsonSerializer.Serialize(entry), type);
     }
 }
