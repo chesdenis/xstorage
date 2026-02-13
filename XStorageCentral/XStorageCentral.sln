@@ -1,0 +1,30 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XStorage.Logging", "XStorage.Logging\XStorage.Logging.csproj", "{B4C36541-CD27-4D22-9199-2690ED1A11F5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{5292CA84-740B-43A0-A050-E41A2DE701D1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "unit", "unit", "{88840137-31CF-4578-A5F7-F65B89A41BA3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XStorage.Logging.UnitTests", "tests\unit\XStorage.Logging.UnitTests\XStorage.Logging.UnitTests.csproj", "{9469C6DA-38EA-4412-AFC3-B7D2B578A736}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B4C36541-CD27-4D22-9199-2690ED1A11F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4C36541-CD27-4D22-9199-2690ED1A11F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4C36541-CD27-4D22-9199-2690ED1A11F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4C36541-CD27-4D22-9199-2690ED1A11F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9469C6DA-38EA-4412-AFC3-B7D2B578A736}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9469C6DA-38EA-4412-AFC3-B7D2B578A736}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9469C6DA-38EA-4412-AFC3-B7D2B578A736}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9469C6DA-38EA-4412-AFC3-B7D2B578A736}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{88840137-31CF-4578-A5F7-F65B89A41BA3} = {5292CA84-740B-43A0-A050-E41A2DE701D1}
+		{9469C6DA-38EA-4412-AFC3-B7D2B578A736} = {88840137-31CF-4578-A5F7-F65B89A41BA3}
+	EndGlobalSection
+EndGlobal
