@@ -2,15 +2,42 @@
 using Polly;
 using Polly.Retry;
 using RabbitMQ.Client;
+using XStorage.Common;
 
 namespace XStorage.Logging.Adapters;
 
-public class RabbitMqAppLogging(IConnectionFactory connectionFactory, string exchangeName) : AppLogging
+public class RabbitMqAppLogging : AppLogging
 {
-    private readonly string _exchangeName = exchangeName;
+    private readonly string _exchangeName;
+    private readonly IConnectionFactory _connectionFactory;
     private IConnection? _connection;
     private IChannel? _channel;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
+
+    public RabbitMqAppLogging()
+    {
+        _exchangeName = "RABBITMQ_EXCHANGE".ResolveFromEnv();
+        var hostName = "RABBITMQ_HOST".ResolveFromEnv();
+        var userName = "RABBITMQ_USER".ResolveFromEnv();
+        var password = "RABBITMQ_PASS".ResolveFromEnv();
+        var portStr = "RABBITMQ_PORT".ResolveFromEnv();
+        var virtualHost = "RABBITMQ_VHOST".ResolveFromEnv();
+
+        var factory = new ConnectionFactory
+        {
+            HostName = hostName,
+            UserName = userName,
+            Password = password,
+            VirtualHost = virtualHost
+        };
+
+        if (int.TryParse(portStr, out var port))
+        {
+            factory.Port = port;
+        }
+
+        _connectionFactory = factory;
+    }
 
     private readonly ResiliencePipeline _resiliencePipeline = new ResiliencePipelineBuilder()
         .AddRetry(new RetryStrategyOptions
@@ -62,7 +89,7 @@ public class RabbitMqAppLogging(IConnectionFactory connectionFactory, string exc
             if (_channel != null) await _channel.DisposeAsync();
             if (_connection != null) await _connection.DisposeAsync();
 
-            _connection = await connectionFactory.CreateConnectionAsync();
+            _connection = await _connectionFactory.CreateConnectionAsync();
             _channel = await _connection.CreateChannelAsync();
             return _channel;
         }

@@ -15,7 +15,12 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\..\XStorage.Logging.Adapters\XStorage.Logging.Adapters.csproj" />
       <ProjectReference Include="..\..\..\XStorage.Logging\XStorage.Logging.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="RabbitMQ.Client" Version="7.0.0" />
     </ItemGroup>
 
     <ItemGroup>

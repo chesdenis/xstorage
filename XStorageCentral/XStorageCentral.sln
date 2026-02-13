@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XStorage.Logging.UnitTests"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XStorage.Logging.Adapters", "XStorage.Logging.Adapters\XStorage.Logging.Adapters.csproj", "{82B233A6-02B4-4762-82F9-5767F504D0D8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XStorage.Common", "XStorage.Common\XStorage.Common.csproj", "{65B7F206-BA7F-400D-B843-D949321FFFB1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,6 +30,10 @@ Global
 		{82B233A6-02B4-4762-82F9-5767F504D0D8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{82B233A6-02B4-4762-82F9-5767F504D0D8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{82B233A6-02B4-4762-82F9-5767F504D0D8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65B7F206-BA7F-400D-B843-D949321FFFB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65B7F206-BA7F-400D-B843-D949321FFFB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65B7F206-BA7F-400D-B843-D949321FFFB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65B7F206-BA7F-400D-B843-D949321FFFB1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{88840137-31CF-4578-A5F7-F65B89A41BA3} = {5292CA84-740B-43A0-A050-E41A2DE701D1}
