@@ -21,6 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\..\infra\XStorage.RabbitMq\XStorage.RabbitMq.csproj" />
       <ProjectReference Include="..\..\..\XStorage.Logging.Adapters\XStorage.Logging.Adapters.csproj" />
     </ItemGroup>
 

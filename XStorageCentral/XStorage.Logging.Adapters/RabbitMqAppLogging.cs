@@ -1,21 +1,27 @@
-﻿using System.Text;
+﻿using System.Net.Sockets;
+using System.Text;
 using Polly;
 using Polly.Retry;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 using XStorage.Common;
 
 namespace XStorage.Logging.Adapters;
 
+
+
 public class RabbitMqAppLogging : AppLogging
 {
+    private readonly IMessagePublisher _publisher;
     private readonly string _exchangeName;
     private readonly IConnectionFactory _connectionFactory;
     private IConnection? _connection;
     private IChannel? _channel;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
-    public RabbitMqAppLogging()
+    public RabbitMqAppLogging(IMessagePublisher publisher)
     {
+        _publisher = publisher;
         _exchangeName = "RABBITMQ_EXCHANGE".ResolveFromEnv();
         var hostName = "RABBITMQ_HOST".ResolveFromEnv();
         var userName = "RABBITMQ_USER".ResolveFromEnv();
@@ -56,10 +62,9 @@ public class RabbitMqAppLogging : AppLogging
         var processedIndex = 0;
         var logsSnapshot = logs.ToArray();
         
+        // we use sync because these are just logs ingestion.
         _resiliencePipeline.ExecuteAsync(async (state, ct) =>
         {
-            var channel = await state.This.GetChannelAsync();
-
             while (processedIndex < logsSnapshot.Length)
             {
                 var message = logsSnapshot[processedIndex].Message;
@@ -67,12 +72,11 @@ public class RabbitMqAppLogging : AppLogging
                 
                 var body = Encoding.UTF8.GetBytes(message);
                 
-                await channel.BasicPublishAsync(
-                    exchange: state.This._exchangeName,
+                await _publisher.PublishAsync(
+                    topic: state.This._exchangeName,
                     routingKey: type,
-                    mandatory: false,
                     body: body,
-                    cancellationToken: ct);
+                    CancellationToken.None);
                 
                 processedIndex++;
             }
