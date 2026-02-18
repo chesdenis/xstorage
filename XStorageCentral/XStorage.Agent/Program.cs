@@ -1,0 +1,239 @@
+﻿using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using Polly;
+using Polly.Retry;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using XStorage.Common;
+
+var agentId = "AGENT_ID".ResolveFromEnv();;
+var rabbitHost = "RABBIT_HOST".ResolveFromEnv();
+var rabbitUser = "RABBIT_USER".ResolveFromEnv();
+var rabbitPass = "RABBIT_PASS".ResolveFromEnv();
+var rabbitVhost = "RABBIT_VHOST".ResolveFromEnv();
+var rabbitPort = "RABBIT_PORT".ResolveFromEnv();
+
+var cmdExchange = "CMD_EXCHANGE".ResolveFromEnv();
+var queuePrefix = "QUEUE_PREFIX".ResolveFromEnv();
+
+var queueName = $"{queuePrefix}{agentId}";
+
+var jsonOpts = new JsonSerializerOptions
+{
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    WriteIndented = false
+};
+
+using var http = new HttpClient();
+http.Timeout = TimeSpan.FromSeconds(30);
+http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Agent", "1.0"));
+
+AsyncRetryPolicy<HttpResponseMessage> callbackPolicy = Policy<HttpResponseMessage>
+    .Handle<HttpRequestException>()
+    .OrResult(resp =>
+    {
+        if ((int)resp.StatusCode is >= 200 and <= 299) return false;
+        if (resp.StatusCode == HttpStatusCode.Conflict) return false;
+
+        return resp.StatusCode == HttpStatusCode.TooManyRequests
+            || resp.StatusCode == HttpStatusCode.RequestTimeout
+            || resp.StatusCode == HttpStatusCode.BadGateway
+            || resp.StatusCode == HttpStatusCode.ServiceUnavailable
+            || resp.StatusCode == HttpStatusCode.GatewayTimeout
+            || (int)resp.StatusCode >= 500;
+    })
+    .WaitAndRetryForeverAsync(_ => TimeSpan.FromSeconds(3));
+
+Console.WriteLine($"AgentId: {agentId}");
+Console.WriteLine("Press Ctrl+C to stop.");
+
+using var cts = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+
+var factory = new ConnectionFactory
+{
+    HostName = rabbitHost,
+    Port = rabbitPort.AsInt(),
+    UserName = rabbitUser,
+    Password = rabbitPass,
+    VirtualHost = rabbitVhost,
+
+    AutomaticRecoveryEnabled = true,
+    NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
+    TopologyRecoveryEnabled = true
+};
+
+await using var conn = await factory.CreateConnectionAsync(clientProvidedName: $"agent-{agentId}");
+await using var ch = await conn.CreateChannelAsync();
+
+// Ensure topology (idempotent)
+await ch.ExchangeDeclareAsync(exchange: cmdExchange, type: ExchangeType.Direct, durable: true, autoDelete: false, arguments: null);
+await ch.QueueDeclareAsync(queue: queueName, durable: true, exclusive: false, autoDelete: false, arguments: null);
+await ch.QueueBindAsync(queue: queueName, exchange: cmdExchange, routingKey: agentId);
+
+await ch.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
+
+var consumer = new AsyncEventingBasicConsumer(ch);
+consumer.ReceivedAsync += async (_, ea) =>
+{
+    var deliveryTag = ea.DeliveryTag;
+
+    try
+    {
+        var json = Encoding.UTF8.GetString(ea.Body.ToArray());
+
+        CommandEnvelope? cmd;
+        try
+        {
+            cmd = JsonSerializer.Deserialize<CommandEnvelope>(json, jsonOpts);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[BAD JSON] {ex.Message}");
+            await ch.BasicRejectAsync(deliveryTag, requeue: false);
+            return;
+        }
+
+        if (cmd is null || string.IsNullOrWhiteSpace(cmd.CommandId) || string.IsNullOrWhiteSpace(cmd.CallbackUrl))
+        {
+            Console.Error.WriteLine("[INVALID CMD] Missing commandId or callbackUrl.");
+            await ch.BasicRejectAsync(deliveryTag, requeue: false);
+            return;
+        }
+
+        if (!string.Equals(cmd.ClientId, agentId, StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine($"[WRONG TARGET] cmd.ClientId={cmd.ClientId} agentId={agentId}");
+            await ch.BasicRejectAsync(deliveryTag, requeue: true);
+            return;
+        }
+
+        Console.WriteLine($"[RECV] commandId={cmd.CommandId} kind={cmd.Kind}");
+
+        var started = DateTimeOffset.UtcNow;
+        var (ok, payload, error) = await ExecutePlaceholderAsync(cmd, cts.Token);
+        var finished = DateTimeOffset.UtcNow;
+
+        var result = new CommandResult
+        {
+            CommandId = cmd.CommandId,
+            ClientId = agentId,
+            Ok = ok,
+            JsonPayload = payload,
+            Error = error,
+            StartedAtUtc = started,
+            FinishedAtUtc = finished
+        };
+
+        await PostResultWithPollyAsync(http, callbackPolicy, cmd.CallbackUrl!, cmd.ResultToken, result, cts.Token);
+
+        await ch.BasicAckAsync(deliveryTag, multiple: false);
+        Console.WriteLine($"[ACK] commandId={cmd.CommandId} ok={ok}");
+    }
+    catch (OperationCanceledException)
+    {
+        try { await ch.BasicNackAsync(deliveryTag, multiple: false, requeue: true); } catch { }
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"[FAIL] {ex.GetType().Name}: {ex.Message}");
+        try { await ch.BasicNackAsync(deliveryTag, multiple: false, requeue: true); } catch { }
+    }
+};
+
+var consumerTag = await ch.BasicConsumeAsync(queue: queueName, autoAck: false, consumer: consumer);
+
+try
+{
+    await Task.Delay(Timeout.Infinite, cts.Token);
+}
+finally
+{
+    try { await ch.BasicCancelAsync(consumerTag); }
+    catch
+    {
+        // ignored
+    }
+}
+
+static async Task<(bool Ok, string? Payload, string? Error)> ExecutePlaceholderAsync(CommandEnvelope cmd, CancellationToken ct)
+{
+    var delayMs = cmd.Kind?.Equals("Ping", StringComparison.OrdinalIgnoreCase) == true ? 50 : 300;
+    await Task.Delay(delayMs, ct);
+
+    return (true, JsonSerializer.Serialize(new { kind = cmd.Kind, echo = cmd.JsonPayload }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }), null);
+}
+
+static async Task PostResultWithPollyAsync(
+    HttpClient http,
+    AsyncRetryPolicy<HttpResponseMessage> policy,
+    string callbackUrl,
+    string? token,
+    CommandResult result,
+    CancellationToken ct)
+{
+    var json = JsonSerializer.Serialize(result, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+    // IMPORTANT: HttpContent can't be reused across retries. Create it inside the execution.
+    HttpResponseMessage resp = await policy.ExecuteAsync(async (context, tokenCt) =>
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, callbackUrl);
+        req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        if (!string.IsNullOrWhiteSpace(token))
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        return await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, tokenCt);
+    }, new Context(), ct);
+
+    // Final result handling (non-retriable statuses land here)
+    if ((int)resp.StatusCode is >= 200 and <= 299 || resp.StatusCode == HttpStatusCode.Conflict)
+    {
+        resp.Dispose();
+        return;
+    }
+
+    var body = await SafeReadBodyAsync(resp, ct);
+    resp.Dispose();
+
+    // Fail hard on common auth/client errors
+    if ((int)resp.StatusCode is 400 or 401 or 403 or 404)
+        throw new InvalidOperationException($"Callback rejected: {(int)resp.StatusCode} {resp.ReasonPhrase}. Body={body}");
+
+    throw new TimeoutException($"Callback failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. Body={body}");
+}
+
+static async Task<string> SafeReadBodyAsync(HttpResponseMessage resp, CancellationToken ct)
+{
+    try { return await resp.Content.ReadAsStringAsync(ct); }
+    catch { return "<unreadable>"; }
+}
+
+public sealed class CommandEnvelope
+{
+    public string? CommandId { get; set; }
+    public string? ClientId { get; set; }
+    public string? Kind { get; set; }
+    public string? JsonPayload { get; set; }
+
+    // Callback endpoint in central API
+    public string? CallbackUrl { get; set; }
+
+    // Optional auth token to send as Bearer for callback
+    public string? ResultToken { get; set; }
+
+    public DateTimeOffset? ExpiresAtUtc { get; set; }
+}
+
+public sealed class CommandResult
+{
+    public string CommandId { get; set; } = "";
+    public string ClientId { get; set; } = "";
+    public bool Ok { get; set; }
+    public string? JsonPayload { get; set; }
+    public string? Error { get; set; }
+    public DateTimeOffset StartedAtUtc { get; set; }
+    public DateTimeOffset FinishedAtUtc { get; set; }
+}
