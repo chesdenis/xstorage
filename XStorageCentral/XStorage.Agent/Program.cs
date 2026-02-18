@@ -7,6 +7,9 @@ using Polly.Retry;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using XStorage.Common;
+using XStorage.Logging;
+using XStorage.Logging.Adapters;
+using XStorage.RabbitMq;
 
 var agentId = "AGENT_ID".ResolveFromEnv();;
 var rabbitHost = "RABBIT_HOST".ResolveFromEnv();
@@ -25,6 +28,8 @@ var jsonOpts = new JsonSerializerOptions
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     WriteIndented = false
 };
+
+using var appLogging = new RabbitMqAppLogging(new RabbitMqMessagePublisher());
 
 using var http = new HttpClient();
 http.Timeout = TimeSpan.FromSeconds(30);
@@ -46,7 +51,8 @@ AsyncRetryPolicy<HttpResponseMessage> callbackPolicy = Policy<HttpResponseMessag
     })
     .WaitAndRetryForeverAsync(_ => TimeSpan.FromSeconds(3));
 
-Console.WriteLine($"AgentId: {agentId}");
+appLogging.WriteFact("AgentId: {agentId}", agentId);
+Console.WriteLine($"Agent started. AgentId: {agentId}");
 Console.WriteLine("Press Ctrl+C to stop.");
 
 using var cts = new CancellationTokenSource();
@@ -79,7 +85,7 @@ var consumer = new AsyncEventingBasicConsumer(ch);
 consumer.ReceivedAsync += async (_, ea) =>
 {
     var deliveryTag = ea.DeliveryTag;
-
+    
     try
     {
         var json = Encoding.UTF8.GetString(ea.Body.ToArray());
@@ -91,26 +97,26 @@ consumer.ReceivedAsync += async (_, ea) =>
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[BAD JSON] {ex.Message}");
+            appLogging.WriteFault("[BAD JSON] {agentId} {message}", new {agentId, ex.Message});
             await ch.BasicRejectAsync(deliveryTag, requeue: false);
             return;
         }
 
         if (cmd is null || string.IsNullOrWhiteSpace(cmd.CommandId) || string.IsNullOrWhiteSpace(cmd.CallbackUrl))
         {
-            Console.Error.WriteLine("[INVALID CMD] Missing commandId or callbackUrl.");
+            appLogging.WriteFault("[INVALID CMD] Missing commandId or callbackUrl. {agentId} {message}", new {agentId});
             await ch.BasicRejectAsync(deliveryTag, requeue: false);
             return;
         }
 
         if (!string.Equals(cmd.ClientId, agentId, StringComparison.Ordinal))
         {
-            Console.Error.WriteLine($"[WRONG TARGET] cmd.ClientId={cmd.ClientId} agentId={agentId}");
+            appLogging.WriteFault("[WRONG TARGET] cmd.ClientId={clientId} agentId={agentId}", new {cmd.ClientId, agentId});
             await ch.BasicRejectAsync(deliveryTag, requeue: true);
             return;
         }
 
-        Console.WriteLine($"[RECV] commandId={cmd.CommandId} kind={cmd.Kind}");
+        appLogging.WriteInfo("[RECV] commandId={commandId} kind={kind}", new {cmd.CommandId, cmd.Kind});
 
         var started = DateTimeOffset.UtcNow;
         var (ok, payload, error) = await ExecutePlaceholderAsync(cmd, cts.Token);
@@ -127,10 +133,10 @@ consumer.ReceivedAsync += async (_, ea) =>
             FinishedAtUtc = finished
         };
 
-        await PostResultWithPollyAsync(http, callbackPolicy, cmd.CallbackUrl!, cmd.ResultToken, result, cts.Token);
+        await PostResults(http, callbackPolicy, cmd.CallbackUrl!, cmd.ResultToken, result, cts.Token);
 
         await ch.BasicAckAsync(deliveryTag, multiple: false);
-        Console.WriteLine($"[ACK] commandId={cmd.CommandId} ok={ok}");
+        appLogging.WriteTraffic("[ACK] agentId={agentId} commandId={commandId} ok={ok}",  new {agentId, cmd.CommandId});
     }
     catch (OperationCanceledException)
     {
@@ -138,7 +144,7 @@ consumer.ReceivedAsync += async (_, ea) =>
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[FAIL] {ex.GetType().Name}: {ex.Message}");
+        appLogging.WriteFault("[FAIL] {name}: {message}", new {name = ex.GetType().Name, message = ex.Message});
         try { await ch.BasicNackAsync(deliveryTag, multiple: false, requeue: true); } catch { }
     }
 };
@@ -166,7 +172,7 @@ static async Task<(bool Ok, string? Payload, string? Error)> ExecutePlaceholderA
     return (true, JsonSerializer.Serialize(new { kind = cmd.Kind, echo = cmd.JsonPayload }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }), null);
 }
 
-static async Task PostResultWithPollyAsync(
+static async Task PostResults(
     HttpClient http,
     AsyncRetryPolicy<HttpResponseMessage> policy,
     string callbackUrl,
@@ -195,7 +201,7 @@ static async Task PostResultWithPollyAsync(
         return;
     }
 
-    var body = await SafeReadBodyAsync(resp, ct);
+    var body = await resp.Content.ReadAsStringAsync(ct);
     resp.Dispose();
 
     // Fail hard on common auth/client errors
@@ -203,12 +209,6 @@ static async Task PostResultWithPollyAsync(
         throw new InvalidOperationException($"Callback rejected: {(int)resp.StatusCode} {resp.ReasonPhrase}. Body={body}");
 
     throw new TimeoutException($"Callback failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. Body={body}");
-}
-
-static async Task<string> SafeReadBodyAsync(HttpResponseMessage resp, CancellationToken ct)
-{
-    try { return await resp.Content.ReadAsStringAsync(ct); }
-    catch { return "<unreadable>"; }
 }
 
 public sealed class CommandEnvelope

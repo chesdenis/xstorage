@@ -27,6 +27,7 @@ public abstract class AppLogging : LogBuffer, IAppLogging
     public void WriteTraffic<T>(string msg, T? data = default) => Enqueue("trf", msg, data);
 
     public void WriteInfo<T>(string msg, T data) => Enqueue("inf", msg, data);
+    public void WriteFault<T>(string msg, T data) => Enqueue("flt", msg, data);
     public void WriteDebug<T>(string msg, T data) => Enqueue("dbg", msg, data);
     
     public void WriteFact<T>(string msg, T data) => Enqueue("fct", msg, data);

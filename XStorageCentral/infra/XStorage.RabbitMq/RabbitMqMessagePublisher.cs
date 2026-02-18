@@ -16,7 +16,6 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher
     
     public RabbitMqMessagePublisher()
     {
-        // Your exact config code 👇
         var hostName = "RABBITMQ_HOST".ResolveFromEnv();
         var userName = "RABBITMQ_USER".ResolveFromEnv();
         var password = "RABBITMQ_PASS".ResolveFromEnv();
