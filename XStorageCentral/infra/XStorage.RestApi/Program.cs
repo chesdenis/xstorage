@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using XStorage.RestApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,10 +10,13 @@ builder.Services.AddSingleton<ISectionsAdapter, NotImplementedSectionsAdapter>()
 builder.Services.AddSingleton<IIdsAdapter, NotImplementedIdsAdapter>();
 builder.Services.AddSingleton<ISelectionsAdapter, NotImplementedSelectionsAdapter>();
 
+builder.Services.AddSingleton<IUpsertAdapter, NotImplementedUpsertAdapter>();
+
 var app = builder.Build();
 
 app.MapGet("/", () => "ok");
 
-app.MapBackboneEndpoints();
+app.MapReadEndpoints();
+app.MapUpsertEndpoints();
 
 app.Run();

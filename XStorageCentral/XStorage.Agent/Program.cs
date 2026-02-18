@@ -7,7 +7,6 @@ using Polly.Retry;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using XStorage.Common;
-using XStorage.Logging;
 using XStorage.Logging.Adapters;
 using XStorage.RabbitMq;
 
@@ -29,7 +28,8 @@ var jsonOpts = new JsonSerializerOptions
     WriteIndented = false
 };
 
-using var appLogging = new RabbitMqAppLogging(new RabbitMqMessagePublisher());
+var rabbitMqMessagePublisher = new RabbitMqMessagePublisher();
+var appLogging = new RabbitMqAppLogging(rabbitMqMessagePublisher);
 
 using var http = new HttpClient();
 http.Timeout = TimeSpan.FromSeconds(30);
@@ -56,7 +56,14 @@ Console.WriteLine($"Agent started. AgentId: {agentId}");
 Console.WriteLine("Press Ctrl+C to stop.");
 
 using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+Console.CancelKeyPress += (_, e) =>
+{
+    e.Cancel = true; 
+    cts.Cancel();
+    
+    // to not lose logs which are inside buffer
+    appLogging.Dispose();
+};
 
 var factory = new ConnectionFactory
 {

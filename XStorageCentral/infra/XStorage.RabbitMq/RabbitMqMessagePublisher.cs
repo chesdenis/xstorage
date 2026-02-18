@@ -7,6 +7,10 @@ using XStorage.Common;
 
 namespace XStorage.RabbitMq;
 
+/// <summary>
+/// This component can publish with automatic recreation of the connection on failure.
+/// Must be used as long running per process singleton
+/// </summary>
 public sealed class RabbitMqMessagePublisher : IMessagePublisher
 {
     private readonly ConnectionFactory _connectionFactory;
@@ -62,21 +66,27 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher
     {
         return _publishPipeline.ExecuteAsync(async pipelineCt =>
         {
-            await EnsureConnectedAsync().ConfigureAwait(false);
-
-            var props = new BasicProperties
+            try
             {
-                Persistent = true,
-                ContentType = "application/octet-stream"
-            };
+                var props = new BasicProperties
+                {
+                    Persistent = true,
+                    ContentType = "application/octet-stream"
+                };
 
-            // Confirms are enabled on the channel, so this await completes only when confirmed.
-            await _channel!.BasicPublishAsync(
-                exchange: topic,
-                routingKey: routingKey,
-                mandatory: true,
-                basicProperties: props,
-                body: body, cancellationToken: pipelineCt).ConfigureAwait(false);
+                // Confirms are enabled on the channel, so this await completes only when confirmed.
+                await _channel!.BasicPublishAsync(
+                    exchange: topic,
+                    routingKey: routingKey,
+                    mandatory: true,
+                    basicProperties: props,
+                    body: body, cancellationToken: pipelineCt).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                await EnsureConnectedAsync().ConfigureAwait(false);
+                throw;
+            }
 
         }, ct).AsTask();
     }

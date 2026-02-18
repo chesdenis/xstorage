@@ -28,6 +28,17 @@ public interface IQueryAdapter
     Task<StorageResult> HandleAsync(StorageQueryArgs queryArgs, CancellationToken ct);
 }
 
+public interface IUpsertAdapter : IQueryAdapter
+{
+    Task UpsertMetadataAsync(object metadata, CancellationToken ct);
+    Task UpsertDescriptionAsync(object metadata, CancellationToken ct);
+    Task UpsertEngShortAsync(object metadata, CancellationToken ct);
+    Task UpsertEng30TagsAsync(object metadata, CancellationToken ct);
+    Task UpsertCommerceMarkAsync(object metadata, CancellationToken ct);
+    Task UpsertEmbAsync(object metadata, CancellationToken ct);
+    Task UpsertPreviewAsync(object metadata, CancellationToken ct);
+}
+
 public interface IFilterAdapter : IQueryAdapter
 {
 }
@@ -64,3 +75,46 @@ internal sealed class NotImplementedPartitionsAdapter : NotImplementedAdapterBas
 internal sealed class NotImplementedSectionsAdapter : NotImplementedAdapterBase, ISectionsAdapter { }
 internal sealed class NotImplementedIdsAdapter : NotImplementedAdapterBase, IIdsAdapter { }
 internal sealed class NotImplementedSelectionsAdapter : NotImplementedAdapterBase, ISelectionsAdapter { }
+
+internal sealed class NotImplementedUpsertAdapter : IUpsertAdapter
+{
+    public Task<StorageResult> HandleAsync(StorageQueryArgs queryArgs, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpsertMetadataAsync(object metadata, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpsertDescriptionAsync(object metadata, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpsertEngShortAsync(object metadata, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpsertEng30TagsAsync(object metadata, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpsertCommerceMarkAsync(object metadata, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpsertEmbAsync(object metadata, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpsertPreviewAsync(object metadata, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
+}
