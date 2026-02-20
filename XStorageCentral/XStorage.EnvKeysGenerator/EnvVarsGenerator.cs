@@ -1,13 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
+﻿using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
-namespace XStorage.Generators;
+namespace XStorage.EnvKeysGenerator;
 
 [Generator(LanguageNames.CSharp)]
 public sealed class EnvVarsGenerator : IIncrementalGenerator
@@ -21,14 +18,12 @@ public sealed class EnvVarsGenerator : IIncrementalGenerator
             .Where(static f => f.Path.EndsWith(CsvFileName, StringComparison.OrdinalIgnoreCase))
             .Select((file, ct) => (path: file.Path, text: file.GetText(ct)?.ToString()));
 
-        // No need for compilation unless you want it; keep it minimal and fast.
         context.RegisterSourceOutput(csvFiles.Collect(), static (spc, files) =>
         {
             if (files.IsDefaultOrEmpty)
                 return;
 
             var allRows = new List<Row>();
-            var diags = ImmutableArray.CreateBuilder<Diagnostic>();
 
             foreach (var (path, text) in files)
             {
@@ -37,10 +32,8 @@ public sealed class EnvVarsGenerator : IIncrementalGenerator
 
                 var parsed = ParseCsv(text!, path);
                 allRows.AddRange(parsed.Rows);
-                foreach (var d in parsed.Diagnostics) diags.Add(d);
+                foreach (var d in parsed.Diagnostics) spc.ReportDiagnostic(d);
             }
-
-            foreach (var d in diags) spc.ReportDiagnostic(d);
 
             if (allRows.Count == 0)
                 return;

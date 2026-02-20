@@ -20,28 +20,23 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher
     
     public RabbitMqMessagePublisher()
     {
-        var hostName = "RABBITMQ_HOST".FromEnvAsString();
-        var userName = "RABBITMQ_USER".FromEnvAsString();
-        var password = "RABBITMQ_PASS".FromEnvAsString();
-        var portStr = "RABBITMQ_PORT".FromEnvAsString();
-        var virtualHost = "RABBITMQ_VHOST".FromEnvAsString();
+        var hostName = EnvVars.RabbitHost.Key.FromEnvAsString();
+        var userName = EnvVars.RabbitUser.Key.FromEnvAsString();
+        var password = EnvVars.RabbitPwd.Key.FromEnvAsString();
+        var portAsInt = EnvVars.RabbitPort.Key.FromEnvAsInt();
+        var virtualHost = EnvVars.RabbitVHost.Key.FromEnvAsString();
 
         var factory = new ConnectionFactory
         {
             HostName = hostName,
             UserName = userName,
             Password = password,
-            VirtualHost = virtualHost,
-
+            VirtualHost = virtualHost, 
+            Port = portAsInt,
             AutomaticRecoveryEnabled = true,
             TopologyRecoveryEnabled = true
         };
-
-        if (int.TryParse(portStr, out var port))
-        {
-            factory.Port = port;
-        }
-
+        
         _connectionFactory = factory;
         
         _publishPipeline = new ResiliencePipelineBuilder()
