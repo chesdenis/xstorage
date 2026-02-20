@@ -7,7 +7,7 @@ namespace XStorage.Logging.Adapters;
 
 public class RabbitMqAppLogging(IMessagePublisher publisher) : AppLogging
 {
-    private readonly string _exchangeName = "RABBITMQ_EXCHANGE".ResolveFromEnv();
+    private readonly string _exchangeName = "RABBITMQ_EXCHANGE".FromEnvAsString();
 
     private readonly ResiliencePipeline _resiliencePipeline = new ResiliencePipelineBuilder()
         .AddRetry(new RetryStrategyOptions

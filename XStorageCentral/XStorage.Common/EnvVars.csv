@@ -1,0 +1,5 @@
+Name,Key,Description,AllowedValues
+AspNetCoreEnvironment,ASPNETCORE_ENVIRONMENT,ASP.NET environment name,"Development|Staging|Production|SystemTest"
+XStorageUseFakes,XStorage__UseFakes,Enable fake adapters,"true|false"
+RabbitHost,Rabbit__Host,Rabbit host name,
+RabbitPort,Rabbit__Port,Rabbit port,"5672|5671"

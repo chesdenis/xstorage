@@ -2,10 +2,13 @@
 
 public static class EnvironmentVariableExtensions
 {
-    public static string ResolveFromEnv(this string variableName) =>
-        Environment.GetEnvironmentVariable(variableName) 
-        ?? throw new InvalidOperationException($"Environment variable {variableName} is not set");
-    
-    public static int AsInt(this string variableName) =>
-        int.Parse(variableName.ResolveFromEnv());
+    extension(string variableName)
+    {
+        public string FromEnvAsString() =>
+            Environment.GetEnvironmentVariable(variableName) 
+            ?? throw new InvalidOperationException($"Environment variable {variableName} is not set");
+
+        public int FromEnvAsInt() =>
+            int.Parse(variableName.FromEnvAsString());
+    }
 }

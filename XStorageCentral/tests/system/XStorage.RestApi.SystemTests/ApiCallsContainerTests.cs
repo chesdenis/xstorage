@@ -31,6 +31,7 @@ public class ApiCallsContainerTests : IAsyncLifetime
             .WithImage(_image)
             .WithCleanUp(true)
             .WithName($"xstorage-restapi-{Guid.NewGuid():N}")
+            .WithEnvironment("APP_TYPE", "SYSTEM_TESTS")
             .WithPortBinding(8080, assignRandomHostPort:true)
             .WithWaitStrategy(
                 Wait.ForUnixContainer()
@@ -59,7 +60,7 @@ public class ApiCallsContainerTests : IAsyncLifetime
         var hostPort = _container!.GetMappedPublicPort(8080);
         var baseUrl = $"http://localhost:{hostPort}";
 
-        using var http = new HttpClient();
+        using var http = BuildClient();
         var text = await http.GetStringAsync($"{baseUrl}/");
 
         Assert.Equal("ok", text);
@@ -77,9 +78,17 @@ public class ApiCallsContainerTests : IAsyncLifetime
         var hostPort = _container!.GetMappedPublicPort(8080);
         var baseUrl = $"http://localhost:{hostPort}";
 
-        using var http = new HttpClient();
+        using var http = BuildClient();
         var responseMessage = await http.GetAsync($"{baseUrl}{route}");
 
         Assert.NotEqual(HttpStatusCode.NotFound, responseMessage.StatusCode);
+    }
+
+    private static HttpClient BuildClient()
+    {
+        var httpClient = new HttpClient();
+        httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+        return httpClient;
     }
 }

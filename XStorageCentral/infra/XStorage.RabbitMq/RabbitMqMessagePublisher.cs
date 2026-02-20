@@ -20,11 +20,11 @@ public sealed class RabbitMqMessagePublisher : IMessagePublisher
     
     public RabbitMqMessagePublisher()
     {
-        var hostName = "RABBITMQ_HOST".ResolveFromEnv();
-        var userName = "RABBITMQ_USER".ResolveFromEnv();
-        var password = "RABBITMQ_PASS".ResolveFromEnv();
-        var portStr = "RABBITMQ_PORT".ResolveFromEnv();
-        var virtualHost = "RABBITMQ_VHOST".ResolveFromEnv();
+        var hostName = "RABBITMQ_HOST".FromEnvAsString();
+        var userName = "RABBITMQ_USER".FromEnvAsString();
+        var password = "RABBITMQ_PASS".FromEnvAsString();
+        var portStr = "RABBITMQ_PORT".FromEnvAsString();
+        var virtualHost = "RABBITMQ_VHOST".FromEnvAsString();
 
         var factory = new ConnectionFactory
         {

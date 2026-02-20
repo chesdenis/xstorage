@@ -10,15 +10,15 @@ using XStorage.Common;
 using XStorage.Logging.Adapters;
 using XStorage.RabbitMq;
 
-var agentId = "AGENT_ID".ResolveFromEnv();;
-var rabbitHost = "RABBIT_HOST".ResolveFromEnv();
-var rabbitUser = "RABBIT_USER".ResolveFromEnv();
-var rabbitPass = "RABBIT_PASS".ResolveFromEnv();
-var rabbitVhost = "RABBIT_VHOST".ResolveFromEnv();
-var rabbitPort = "RABBIT_PORT".ResolveFromEnv();
+var agentId = "AGENT_ID".FromEnvAsString();;
+var rabbitHost = "RABBIT_HOST".FromEnvAsString();
+var rabbitUser = "RABBIT_USER".FromEnvAsString();
+var rabbitPass = "RABBIT_PASS".FromEnvAsString();
+var rabbitVhost = "RABBIT_VHOST".FromEnvAsString();
+var rabbitPort = "RABBIT_PORT".FromEnvAsString();
 
-var cmdExchange = "CMD_EXCHANGE".ResolveFromEnv();
-var queuePrefix = "QUEUE_PREFIX".ResolveFromEnv();
+var cmdExchange = "CMD_EXCHANGE".FromEnvAsString();
+var queuePrefix = "QUEUE_PREFIX".FromEnvAsString();
 
 var queueName = $"{queuePrefix}{agentId}";
 
@@ -68,7 +68,7 @@ Console.CancelKeyPress += (_, e) =>
 var factory = new ConnectionFactory
 {
     HostName = rabbitHost,
-    Port = rabbitPort.AsInt(),
+    Port = rabbitPort.FromEnvAsInt(),
     UserName = rabbitUser,
     Password = rabbitPass,
     VirtualHost = rabbitVhost,

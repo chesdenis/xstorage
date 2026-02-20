@@ -1,4 +1,7 @@
-﻿namespace XStorage.Common.UnitTests;
+﻿using XStorage.Common.Caching;
+using XStorage.Common.ReadPatterns;
+
+namespace XStorage.Common.UnitTests;
 
 public sealed class ReadPatternTests
 {
