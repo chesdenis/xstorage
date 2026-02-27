@@ -1,0 +1,20 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "XSTORAGE_HDD0": "/Volumes/AnnaR/PhotoHiveHashed",
+        "XSTORAGE_HDD1": "/Volumes/AnnaR/PhotoHiveHashed",
+        "XSTORAGE_HDD2": "/Volumes/AnnaR/PhotoHiveHashed",
+        "XSTORAGE_SSD_META": "/Users/dchesnokov/testfolders/SSD",
+        "DOTNET_EnableDiagnostics": 0,
+        "DOTNET_gcServer": 0
+      }
+    }
+  }
+}
