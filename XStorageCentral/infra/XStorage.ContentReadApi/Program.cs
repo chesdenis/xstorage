@@ -76,28 +76,42 @@ app.MapGet("/files/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
 });
 
 // ----------------------------------------------------
-// GET FULL META: /meta/{md5}
+// GET FULL META: /meta/{md5}?fields=a&fields=b
 // ----------------------------------------------------
-app.MapGet("/meta/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
+app.MapGet("/meta/{md5}", async (HttpContext ctx, [FromRoute]string md5, [FromQuery] string[] fields) =>
 {
+    // we do not support when fields collection is empty, ie to avoid full meta loading
+    if (fields.Length == 0)
+    {
+        ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return;
+    }
+    
+    // Resolve actual read path using layers: SSD preferred, then mapped HDD
     var pattern = BuildMetaAccessPattern(md5);
-
+    
     // Sentinel source: "" means not found anywhere
     var metaPath = await pattern.ExecuteAsync(
         source: () => Task.FromResult(string.Empty),
         ct: ctx.RequestAborted);
-
+    
     if (string.IsNullOrEmpty(metaPath))
     {
         ctx.Response.StatusCode = StatusCodes.Status404NotFound;
         return;
     }
-
-    var fi = new FileInfo(metaPath);
-    ctx.Response.Headers.ETag = $"\"{md5}:{fi.Length}:{fi.LastWriteTimeUtc.Ticks}\"";
-    ctx.Response.ContentType = "application/json; charset=utf-8";
     
-    await ctx.Response.SendFileAsync(metaPath, ctx.RequestAborted);
+    var fieldSet = new HashSet<string>(fields, StringComparer.Ordinal);
+    await using var body = ctx.Response.BodyWriter.AsStream();
+    await using var writer = new Utf8JsonWriter(body, new JsonWriterOptions { Indented = false, SkipValidation = true });
+    
+    writer.WriteStartArray();
+    
+    // Write filtered object (best effort)
+    await WriteFilteredMetaObjectAsync(writer, metaPath, md5, fieldSet, ctx.RequestAborted);
+    
+    writer.WriteEndArray();
+    await writer.FlushAsync(ctx.RequestAborted);
 });
 
 // ----------------------------------------------------

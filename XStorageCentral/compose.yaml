@@ -6,3 +6,8 @@
     build:
       context: .
       dockerfile: infra/XStorage.ContentReadApi/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - /Volumes/AnnaR:/Volumes/AnnaR
+      - /Volumes/AnnaB:/Volumes/AnnaB
