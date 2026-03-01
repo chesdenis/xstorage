@@ -14,7 +14,7 @@
     </ItemGroup>
     
     <ItemGroup>
-      <ProjectReference Include="..\XStorage.Common\XStorage.Common.csproj" />
+      <ProjectReference Include="..\..\XStorage.Common\XStorage.Common.csproj" />
     </ItemGroup>
-
+    
 </Project>
