@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using XStorage.Common;
 using XStorage.ContentReadApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,7 @@ app.Use((ctx, next) =>
 });
 
 var cfg = StorageSelector.Build();
+var partitionMap = PartitionMap.Build();
 
 foreach (var r in cfg.HddRoots) Directory.CreateDirectory(r);
 Directory.CreateDirectory(cfg.SsdMetaRoot);
@@ -53,8 +55,8 @@ app.MapGet("/", () => Results.Text("ok"));
 // ----------------------------------------------------
 app.MapGet("/objects/{md5}", async (HttpContext ctx, string md5) =>
 {
-    var root = cfg.SelectHddRoot(md5);
-    var blobPath = cfg.GetBlobPath(root, md5);
+    var root = cfg.HddRoots.SelectHddRoot(md5);
+    var blobPath = root.GetBlobPath(md5);
 
     if (!File.Exists(blobPath))
     {
@@ -77,14 +79,14 @@ app.MapGet("/objects/{md5}/meta", async (HttpContext ctx, string md5) =>
     string? metaPath = null;
 
     {
-        var p = cfg.GetMetaPath(cfg.SsdMetaRoot, md5);
+        var p = cfg.SsdMetaRoot.GetMetaPath(md5);
         if (File.Exists(p)) metaPath = p;
     }
 
     if (metaPath is null)
     {
-        var root = cfg.SelectHddRoot(md5);
-        var p = cfg.GetMetaPath(root, md5);
+        var root = cfg.HddRoots.SelectHddRoot(md5);
+        var p = root.GetMetaPath(md5);
         if (File.Exists(p)) metaPath = p;
     }
 

@@ -12,5 +12,9 @@
         <Link>.dockerignore</Link>
       </Content>
     </ItemGroup>
+    
+    <ItemGroup>
+      <ProjectReference Include="..\XStorage.Common\XStorage.Common.csproj" />
+    </ItemGroup>
 
 </Project>

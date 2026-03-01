@@ -32,16 +32,22 @@ sealed class StorageSelector
         };
     }
     
-    public string SelectHddRoot(string md5)
-    {
-        // Assumes md5[0..8] are valid hex; user requested no validation/normalization.
-        var v = uint.Parse(md5.AsSpan(0, 8), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-        return HddRoots[(int)(v % (uint)HddRoots.Length)];
-    }
-    
-    public string GetBlobPath(string root, string md5)
-        => Path.Combine(root, md5[..2], md5.Substring(2, 2), md5);
-
-    public string GetMetaPath(string root, string md5)
-        => Path.Combine(root, md5[..2], md5.Substring(2, 2), md5 + ".json");
+    // public string SelectHddRoot(string md5)
+    // {
+    //     // Assumes md5[0..8] are valid hex; user requested no validation/normalization.
+    //     var v = uint.Parse(md5.AsSpan(0, 8), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+    //     return HddRoots[(int)(v % (uint)HddRoots.Length)];
+    // }
+    //
+    // public string SelectHddRootByPartition(string partition)
+    // {
+    //     int p = Convert.ToInt32(partition, 16);
+    //     return HddRoots[p % HddRoots.Length];
+    // }
+    //
+    // public string GetBlobPath(string root, string md5)
+    //     => Path.Combine(root, md5[..2], md5.Substring(2, 2), md5);
+    //
+    // public string GetMetaPath(string root, string md5)
+    //     => Path.Combine(root, md5[..2], md5.Substring(2, 2), md5 + ".json");
 }
