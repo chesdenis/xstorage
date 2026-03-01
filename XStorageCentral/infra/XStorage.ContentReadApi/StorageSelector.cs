@@ -10,12 +10,15 @@ sealed class StorageSelector
     public static StorageSelector Build()
     {
         var h0 = Environment.GetEnvironmentVariable("XSTORAGE_HDD0");
-        var h1 = Environment.GetEnvironmentVariable("XSTORAGE_HDD1");
-        var h2 = Environment.GetEnvironmentVariable("XSTORAGE_HDD2");
+        
+        // we temporary disable extra HDDs to measure baseline performance
+        // var h1 = Environment.GetEnvironmentVariable("XSTORAGE_HDD1");
+        // var h2 = Environment.GetEnvironmentVariable("XSTORAGE_HDD2");
 
-        if (string.IsNullOrWhiteSpace(h0) ||
-            string.IsNullOrWhiteSpace(h1) ||
-            string.IsNullOrWhiteSpace(h2))
+        if (string.IsNullOrWhiteSpace(h0) 
+            // string.IsNullOrWhiteSpace(h1) ||
+            // string.IsNullOrWhiteSpace(h2)
+            )
             throw new InvalidOperationException("Set XSTORAGE_HDD0, XSTORAGE_HDD1, XSTORAGE_HDD2 (absolute paths). Optional: XSTORAGE_SSD_META.");
 
         var ssd = Environment.GetEnvironmentVariable("XSTORAGE_SSD_META");
@@ -27,7 +30,9 @@ sealed class StorageSelector
 
         return new StorageSelector
         {
-            HddRoots = [h0, h1, h2],
+            HddRoots = [h0, 
+               // h1, h2
+            ],
             SsdMetaRoot = ssd
         };
     }

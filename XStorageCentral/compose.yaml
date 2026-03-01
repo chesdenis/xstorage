@@ -1,0 +1,8 @@
+﻿services:
+  xstorage.contentreadapi:
+    image: xstorage.contentreadapi
+    env_file:
+      - infra/XStorage.ContentReadApi/.env
+    build:
+      context: .
+      dockerfile: infra/XStorage.ContentReadApi/Dockerfile
