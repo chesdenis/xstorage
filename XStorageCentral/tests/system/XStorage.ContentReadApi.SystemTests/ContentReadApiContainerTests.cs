@@ -25,7 +25,7 @@ public class ContentReadApiContainerTests : IAsyncLifetime
 
         _image = new ImageFromDockerfileBuilder()
             .WithDockerfileDirectory(repoRoot)
-            .WithDockerfile("XStorageCentral/XStorage.ContentReadApi/Dockerfile")
+            .WithDockerfile("infra/XStorage.ContentReadApi/Dockerfile")
             .WithName($"xstorage-contentreadapi-test:{Guid.NewGuid():N}")
             .Build();
 

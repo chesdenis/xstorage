@@ -9,8 +9,8 @@ using XStorage.ContentReadApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Logging.ClearProviders();
-builder.Logging.SetMinimumLevel(LogLevel.None);
+// builder.Logging.ClearProviders();
+// builder.Logging.SetMinimumLevel(LogLevel.None);
 
 builder.WebHost.ConfigureKestrel((o) =>
 {
@@ -112,6 +112,8 @@ app.MapGet("/meta-range/{rangeId}", async (HttpContext ctx, [FromRoute]int range
     }
 
     var partition = rangeId.GetPartition();
+    var hddSource = cfg.HddRoots.SelectHddRootByPartition(partition);
+    var partitionPath = Path.Combine(hddSource, partition);
 
     // we do not support when fields collection is empty, ie to avoid full meta loading
     if (fields.Length == 0)
@@ -124,7 +126,7 @@ app.MapGet("/meta-range/{rangeId}", async (HttpContext ctx, [FromRoute]int range
     
     // building partition index, from HDDs
     // this can help to understand full map before we read from everything else
-    var md5HashSet = StorageWalker.BuildMd5HashMap(partition);
+    var md5HashSet = StorageWalker.BuildMd5HashMap(partitionPath);
     
     ctx.Response.ContentType = "application/json; charset=utf-8";
     await using var body = ctx.Response.BodyWriter.AsStream();
