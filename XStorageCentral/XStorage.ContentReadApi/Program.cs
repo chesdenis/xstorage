@@ -51,36 +51,12 @@ var partitionMap = PartitionMap.Build();
 foreach (var r in cfg.HddRoots) Directory.CreateDirectory(r);
 Directory.CreateDirectory(cfg.SsdMetaRoot);
 
-async Task SendFilteredJsonAsync(HttpContext ctx, string filePath, string[] requestedFields)
-{
-    await using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, true);
-    var node = await JsonNode.ParseAsync(fs, cancellationToken: ctx.RequestAborted);
-    
-    if (node is not JsonObject obj)
-    {
-        ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        return;
-    }
-
-    var filtered = new JsonObject();
-    foreach (var field in requestedFields)
-    {
-        if (obj.TryGetPropertyValue(field, out var value))
-        {
-            filtered[field] = value?.DeepClone();
-        }
-    }
-
-    ctx.Response.ContentType = "application/json; charset=utf-8";
-    await JsonSerializer.SerializeAsync(ctx.Response.Body, filtered, cancellationToken: ctx.RequestAborted);
-}
-
 app.MapGet("/", () => Results.Text("ok"));
 
 // ----------------------------------------------------
 // GET BLOB: /files/{md5}
 // ----------------------------------------------------
-app.MapGet("/files/{md5}", async (HttpContext ctx, string md5) =>
+app.MapGet("/files/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
 {
     var root = cfg.HddRoots.SelectHddRoot(md5);
     var blobPath = root.GetBlobPath(md5);
@@ -99,17 +75,10 @@ app.MapGet("/files/{md5}", async (HttpContext ctx, string md5) =>
 });
 
 // ----------------------------------------------------
-// GET META (SSD preferred): /objects/{md5}/meta
+// GET FULL META: /meta/{md5}
 // ----------------------------------------------------
-app.MapGet("/meta/{md5}", async (HttpContext ctx, string md5) =>
+app.MapGet("/meta/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
 {
-    var fields = ctx.Request.Query["fields"].ToString().Split(',', StringSplitOptions.RemoveEmptyEntries);
-    if (fields.Length == 0)
-    {
-        ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-        return;
-    }
-
     string? metaPath = null;
 
     {
@@ -131,7 +100,7 @@ app.MapGet("/meta/{md5}", async (HttpContext ctx, string md5) =>
     }
 
     ctx.Response.Headers.ETag = $"\"{md5}.json\"";
-    await SendFilteredJsonAsync(ctx, metaPath, fields);
+    await ctx.Response.SendFileAsync(metaPath, ctx.RequestAborted);
 });
 
 // ----------------------------------------------------
@@ -153,50 +122,8 @@ app.MapGet("/meta-range/{rangeId}", async (HttpContext ctx, [FromRoute]int range
         return;
     }
 
-    ctx.Response.ContentType = "application/json; charset=utf-8";
-    await using var writer = new Utf8JsonWriter(ctx.Response.Body);
-    writer.WriteStartArray();
+    throw new NotImplementedException();
 
-    var seenFiles = new HashSet<string>();
-    
-    async Task ProcessDirectory(string root)
-    {
-        var partitionDir = Path.Combine(root, partition);
-        if (!Directory.Exists(partitionDir)) return;
-
-        foreach (var subDir in Directory.EnumerateDirectories(partitionDir))
-        {
-            foreach (var metaFile in Directory.EnumerateFiles(subDir, "*.json"))
-            {
-                var fileName = Path.GetFileName(metaFile);
-                if (seenFiles.Add(fileName))
-                {
-                    await using var fs = new FileStream(metaFile, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, true);
-                    var node = await JsonNode.ParseAsync(fs, cancellationToken: ctx.RequestAborted);
-                    if (node is JsonObject obj)
-                    {
-                        var filtered = new JsonObject();
-                        foreach (var field in fields)
-                        {
-                            if (obj.TryGetPropertyValue(field, out var value))
-                            {
-                                filtered[field] = value?.DeepClone();
-                            }
-                        }
-                        JsonSerializer.Serialize(writer, filtered);
-                    }
-                }
-            }
-        }
-    }
-
-    await ProcessDirectory(cfg.SsdMetaRoot);
-    
-    var hddRoot = cfg.HddRoots.SelectHddRootByPartition(partition);
-    await ProcessDirectory(hddRoot);
-
-    writer.WriteEndArray();
-    await writer.FlushAsync(ctx.RequestAborted);
 });
 
 
