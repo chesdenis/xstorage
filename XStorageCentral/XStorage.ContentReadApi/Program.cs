@@ -1,8 +1,10 @@
+using System.Buffers;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using XStorage.Common;
+using XStorage.Common.Caching;
+using XStorage.Common.ReadPatterns;
 using XStorage.ContentReadApi;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -79,32 +81,28 @@ app.MapGet("/files/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
 // ----------------------------------------------------
 app.MapGet("/meta/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
 {
-    string? metaPath = null;
+    var pattern = BuildMetaAccessPattern(md5);
 
-    {
-        var p = cfg.SsdMetaRoot.GetMetaPath(md5);
-        if (File.Exists(p)) metaPath = p;
-    }
+    // Sentinel source: "" means not found anywhere
+    var metaPath = await pattern.ExecuteAsync(
+        source: () => Task.FromResult(string.Empty),
+        ct: ctx.RequestAborted);
 
-    if (metaPath is null)
-    {
-        var root = cfg.HddRoots.SelectHddRoot(md5);
-        var p = root.GetMetaPath(md5);
-        if (File.Exists(p)) metaPath = p;
-    }
-
-    if (metaPath is null)
+    if (string.IsNullOrEmpty(metaPath))
     {
         ctx.Response.StatusCode = StatusCodes.Status404NotFound;
         return;
     }
 
-    ctx.Response.Headers.ETag = $"\"{md5}.json\"";
+    var fi = new FileInfo(metaPath);
+    ctx.Response.Headers.ETag = $"\"{md5}:{fi.Length}:{fi.LastWriteTimeUtc.Ticks}\"";
+    ctx.Response.ContentType = "application/json; charset=utf-8";
+    
     await ctx.Response.SendFileAsync(metaPath, ctx.RequestAborted);
 });
 
 // ----------------------------------------------------
-// GET META (SSD preferred): /meta-range/{rangeId}?fields=a,b,c,d,e
+// GET RANGE OF META with selected fields: /meta-range/{rangeId}?fields=a,b,c,d,e
 // ----------------------------------------------------
 app.MapGet("/meta-range/{rangeId}", async (HttpContext ctx, [FromRoute]int rangeId, [FromQuery]string[] fields) =>
 {
@@ -116,11 +114,41 @@ app.MapGet("/meta-range/{rangeId}", async (HttpContext ctx, [FromRoute]int range
 
     var partition = rangeId.GetPartition();
 
+    // we do not support when fields collection is empty, ie to avoid full meta loading
     if (fields.Length == 0)
     {
         ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
         return;
     }
+    
+    var fieldSet = new HashSet<string>(fields, StringComparer.Ordinal);
+    
+    // building partition index, from HDDs
+    // this can help to understand full map before we read from everything else
+    var md5HashSet = StorageWalker.BuildMd5HashMap(partition);
+    
+    ctx.Response.ContentType = "application/json; charset=utf-8";
+    await using var body = ctx.Response.BodyWriter.AsStream();
+    await using var writer = new Utf8JsonWriter(body, new JsonWriterOptions { Indented = false, SkipValidation = true });
+
+    writer.WriteStartArray();
+    
+    foreach (var md5 in md5HashSet)
+    {
+        if (ctx.RequestAborted.IsCancellationRequested) break;
+
+        // Resolve actual read path using layers: SSD preferred, then mapped HDD
+        var pattern = BuildMetaAccessPattern(md5);
+
+        // Sentinel source: "" means not found anywhere
+        var metaPath = await pattern.ExecuteAsync(
+            source: () => Task.FromResult(string.Empty),
+            ct: ctx.RequestAborted);
+        
+        // Write filtered object (best effort)
+        await WriteFilteredMetaObjectAsync(writer, metaPath, md5, fieldSet, ctx.RequestAborted);
+    }
+
 
     throw new NotImplementedException();
 
@@ -130,3 +158,87 @@ app.MapGet("/meta-range/{rangeId}", async (HttpContext ctx, [FromRoute]int range
 app.Urls.Clear();
 
 app.Run();
+
+AsyncReadPattern<string> BuildMetaAccessPattern(string md5)
+{
+    var ssdPath = cfg.SsdMetaRoot.GetMetaPath(md5);
+    var hddRoot = cfg.HddRoots.SelectHddRoot(md5);
+    var hddPath = hddRoot.GetMetaPath(md5);
+    
+    IAsyncReadLayer<string> LO() => new AsyncLayer<string>("SSD",
+        tryReadAsync: ct =>
+            new ValueTask<CacheResult<string>>(
+                File.Exists(ssdPath)
+                    ? CacheResult<string>.HitResult(ssdPath)
+                    : CacheResult<string>.MissResult()),
+        setAsync: (fromPath, ct) =>
+        {
+            // promote from HDD path -> SSD path
+            try
+            {
+                if (File.Exists(ssdPath)) return ValueTask.CompletedTask;
+
+                Directory.CreateDirectory(Path.GetDirectoryName((string?)ssdPath)!);
+                var tmp = ssdPath + ".tmp";
+                File.Copy(fromPath, tmp, overwrite: true);
+                File.Move(tmp, ssdPath, overwrite: true);
+            }
+            catch
+            {
+                // best effort
+            }
+            return ValueTask.CompletedTask;
+        });
+    
+    IAsyncReadLayer<string> L1() => new AsyncLayer<string>(
+        name: "HDD",
+        tryReadAsync: ct =>
+            new ValueTask<CacheResult<string>>(
+                File.Exists(hddPath)
+                    ? CacheResult<string>.HitResult(hddPath)
+                    : CacheResult<string>.MissResult()),
+        setAsync: (v, ct) => ValueTask.CompletedTask // no-op
+    );
+    
+    var asyncReadPattern = new AsyncReadPattern<string>(LO()).Then(L1());
+    return asyncReadPattern;
+}
+
+
+static async ValueTask<bool> WriteFilteredMetaObjectAsync(
+    Utf8JsonWriter writer,
+    string metaPath,
+    string md5,
+    HashSet<string> fieldSet,
+    CancellationToken ct)
+{
+    try
+    {
+        var bytes = await File.ReadAllBytesAsync(metaPath, ct);
+
+        using var doc = JsonDocument.Parse(bytes);
+
+        if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            return false;
+
+        writer.WriteStartObject();
+        writer.WriteString("md5", md5);
+
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            if (!fieldSet.Contains(prop.Name))
+                continue;
+
+            writer.WritePropertyName(prop.Name);
+            // This copies the value (object/array/string/number/etc.) correctly with zero custom code.
+            prop.Value.WriteTo(writer);
+        }
+
+        writer.WriteEndObject();
+        return true;
+    }
+    catch
+    {
+        return false;
+    }
+}

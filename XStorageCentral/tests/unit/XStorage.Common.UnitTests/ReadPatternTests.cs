@@ -301,46 +301,4 @@ public sealed class ReadPatternTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             pattern.ExecuteAsync(() => Task.FromResult(1), CancellationToken.None));
     }
-
-
-    private sealed class SyncLayer<T> : ISyncReadLayer<T>
-    {
-        private readonly Func<CacheResult<T>> _tryRead;
-        private readonly Action<T> _set;
-
-        public SyncLayer(string name, Func<CacheResult<T>> tryRead, Action<T> set)
-        {
-            Name = name;
-            _tryRead = tryRead;
-            _set = set;
-        }
-
-        public string Name { get; }
-        public CacheResult<T> TryRead() => _tryRead();
-        public void Set(T value) => _set(value);
-    }
-
-    private sealed class AsyncLayer<T> : IAsyncReadLayer<T>
-    {
-        private readonly Func<CancellationToken, ValueTask<CacheResult<T>>> _tryReadAsync;
-        private readonly Func<T, CancellationToken, ValueTask> _setAsync;
-
-        public AsyncLayer(
-            string name,
-            Func<CancellationToken, ValueTask<CacheResult<T>>> tryReadAsync,
-            Func<T, CancellationToken, ValueTask> setAsync)
-        {
-            Name = name;
-            _tryReadAsync = tryReadAsync;
-            _setAsync = setAsync;
-        }
-
-        public string Name { get; }
-
-        // Matches your interface: Task SetAsync(T value)
-        // We ignore ct here because your interface doesn't take it.
-        public ValueTask SetAsync(T value, CancellationToken ct) => _setAsync(value, CancellationToken.None);
-        
-        public ValueTask<CacheResult<T>> TryReadAsync(CancellationToken ct) => _tryReadAsync(ct);
-    }
 }
