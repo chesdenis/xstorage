@@ -148,9 +148,9 @@ app.MapGet("/meta-range/{rangeId}", async (HttpContext ctx, [FromRoute]int range
         // Write filtered object (best effort)
         await WriteFilteredMetaObjectAsync(writer, metaPath, md5, fieldSet, ctx.RequestAborted);
     }
-
-
-    throw new NotImplementedException();
+    
+    writer.WriteEndArray();
+    await writer.FlushAsync(ctx.RequestAborted);
 
 });
 
