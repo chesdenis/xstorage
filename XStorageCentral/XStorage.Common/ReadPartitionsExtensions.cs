@@ -4,6 +4,8 @@ namespace XStorage.Common;
 
 public static class ReadPartitionsExtensions
 {
+    public static string GetPartition(this int rangeId) => rangeId.ToString("x2");
+
     public static string SelectHddRoot(this string[] hddRoots, string md5)
     {
         // Assumes md5[0..8] are valid hex; user requested no validation/normalization.
@@ -16,7 +18,7 @@ public static class ReadPartitionsExtensions
         int p = Convert.ToInt32(partition, 16);
         return hddRoots[p % hddRoots.Length];
     }
-    
+
     public static string GetBlobPath(this string root, string md5)
         => Path.Combine(root, md5[..2], md5.Substring(2, 2), md5);
 
