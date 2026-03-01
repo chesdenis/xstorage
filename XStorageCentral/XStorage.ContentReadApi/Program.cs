@@ -48,7 +48,6 @@ app.Use((ctx, next) =>
 });
 
 var cfg = StorageSelector.Build();
-var partitionMap = PartitionMap.Build();
 
 foreach (var r in cfg.HddRoots) Directory.CreateDirectory(r);
 Directory.CreateDirectory(cfg.SsdMetaRoot);
