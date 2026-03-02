@@ -289,6 +289,7 @@ static async Task<string> BuildJsonAndExcludeFields(JsonDocument doc, string md5
     }
 
     jsonWriter.WriteEndObject();
+    ms.Seek(0, SeekOrigin.Begin);
 
     return Encoding.UTF8.GetString(ms.ToArray());
 }
@@ -312,6 +313,7 @@ static async Task<string> BuildJsonWithSelectedFields(JsonDocument doc, string m
     }
 
     jsonWriter.WriteEndObject();
+    ms.Seek(0, SeekOrigin.Begin);
 
     return Encoding.UTF8.GetString(ms.ToArray());
 }
