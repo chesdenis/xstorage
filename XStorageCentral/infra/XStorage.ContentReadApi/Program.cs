@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -76,7 +77,7 @@ app.MapGet("/files/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
 });
 
 // ----------------------------------------------------
-// GET FULL META: /meta/{md5}?fields=a&fields=b
+// GET META: /meta/{md5}?fields=a&fields=b
 // ----------------------------------------------------
 app.MapGet("/meta/{md5}", async (HttpContext ctx, [FromRoute]string md5, [FromQuery] string[] fields) =>
 {
@@ -109,6 +110,38 @@ app.MapGet("/meta/{md5}", async (HttpContext ctx, [FromRoute]string md5, [FromQu
     
     // Write filtered object (best effort)
     await WriteFilteredMetaObjectAsync(writer, metaPath, md5, fieldSet, ctx.RequestAborted);
+    
+    writer.WriteEndArray();
+    await writer.FlushAsync(ctx.RequestAborted);
+});
+
+// ----------------------------------------------------
+// GET PREVIEW: /previews/{md5}
+// ----------------------------------------------------
+app.MapGet("/previews/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
+{
+    // Resolve actual read path using layers: SSD preferred, then mapped HDD
+    var pattern = BuildMetaAccessPattern(md5);
+    
+    // Sentinel source: "" means not found anywhere
+    var metaPath = await pattern.ExecuteAsync(
+        source: () => Task.FromResult(string.Empty),
+        ct: ctx.RequestAborted);
+
+    var previewPath = metaPath + ".previews.json";
+    
+    if (string.IsNullOrEmpty(previewPath))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    await using var body = ctx.Response.BodyWriter.AsStream();
+    await using var writer = new Utf8JsonWriter(body, new JsonWriterOptions { Indented = false, SkipValidation = true });
+    
+    writer.WriteStartArray();
+    
+    // Write filtered object (best effort)
+    await WriteFilteredMetaObjectAsync(writer, previewPath, md5, ["previews"], ctx.RequestAborted);
     
     writer.WriteEndArray();
     await writer.FlushAsync(ctx.RequestAborted);
@@ -186,23 +219,41 @@ AsyncReadPattern<string> BuildMetaAccessPattern(string md5)
                 File.Exists(ssdPath)
                     ? CacheResult<string>.HitResult(ssdPath)
                     : CacheResult<string>.MissResult()),
-        setAsync: (fromPath, ct) =>
+        setAsync: async (fromPath, ct) =>
         {
             // promote from HDD path -> SSD path
             try
             {
-                if (File.Exists(ssdPath)) return ValueTask.CompletedTask;
+                // first step is to just copy metafile
+                if (File.Exists(ssdPath)) return;
 
                 Directory.CreateDirectory(Path.GetDirectoryName((string?)ssdPath)!);
                 var tmp = ssdPath + ".tmp";
                 File.Copy(fromPath, tmp, overwrite: true);
                 File.Move(tmp, ssdPath, overwrite: true);
+                
+                // second step is to split previews and general metadata.
+                // this is because previews content are 99% of size of metafile, but they
+                // must be accessible via separate isolated endpoint
+                
+                var bytes = await File.ReadAllBytesAsync(ssdPath, ct);
+
+                using var doc = JsonDocument.Parse(bytes);
+
+                // we dont work with not supported jsons
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    return;
+
+                var previews = await BuildJsonWithSelectedFields(doc, md5, ["previews"]);
+                var meta = await BuildJsonAndExcludeFields(doc, md5, ["previews"]);
+
+                await File.WriteAllTextAsync(ssdPath, meta);
+                await File.WriteAllTextAsync(ssdPath + ".previews.json", previews);
             }
             catch
             {
                 // best effort
             }
-            return ValueTask.CompletedTask;
         });
     
     IAsyncReadLayer<string> L1() => new AsyncLayer<string>(
@@ -219,6 +270,51 @@ AsyncReadPattern<string> BuildMetaAccessPattern(string md5)
     return asyncReadPattern;
 }
 
+static async Task<string> BuildJsonAndExcludeFields(JsonDocument doc, string md5, HashSet<string> excludedFields)
+{
+    await using var ms = new MemoryStream();
+    await using var jsonWriter = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = false, SkipValidation = true });
+
+    jsonWriter.WriteStartObject();
+    jsonWriter.WriteString("md5", md5);
+
+    foreach (var prop in doc.RootElement.EnumerateObject())
+    {
+        if (excludedFields.Contains(prop.Name))
+            continue;
+
+        jsonWriter.WritePropertyName(prop.Name);
+        // This copies the value (object/array/string/number/etc.) correctly with zero custom code.
+        prop.Value.WriteTo(jsonWriter);
+    }
+
+    jsonWriter.WriteEndObject();
+
+    return Encoding.UTF8.GetString(ms.ToArray());
+}
+
+static async Task<string> BuildJsonWithSelectedFields(JsonDocument doc, string md5, HashSet<string> selectedFields)
+{
+    await using var ms = new MemoryStream();
+    await using var jsonWriter = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = false, SkipValidation = true });
+
+    jsonWriter.WriteStartObject();
+    jsonWriter.WriteString("md5", md5);
+
+    foreach (var prop in doc.RootElement.EnumerateObject())
+    {
+        if (!selectedFields.Contains(prop.Name))
+            continue;
+
+        jsonWriter.WritePropertyName(prop.Name);
+        // This copies the value (object/array/string/number/etc.) correctly with zero custom code.
+        prop.Value.WriteTo(jsonWriter);
+    }
+
+    jsonWriter.WriteEndObject();
+
+    return Encoding.UTF8.GetString(ms.ToArray());
+}
 
 static async ValueTask<bool> WriteFilteredMetaObjectAsync(
     Utf8JsonWriter writer,
