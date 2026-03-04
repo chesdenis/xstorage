@@ -76,6 +76,13 @@ app.MapGet("/files/{md5}", async (HttpContext ctx, [FromRoute]string md5) =>
     await ctx.Response.SendFileAsync(blobPath, ctx.RequestAborted);
 });
 
+app.MapGet("/exists/{md5}", (HttpContext ctx, [FromRoute] string md5) =>
+{
+    var hddRoot = cfg.HddRoots.SelectHddRoot(md5);
+    var metaPath = hddRoot.GetMetaPath(md5); 
+    return Results.Json(new { exists = File.Exists(metaPath) });
+});
+
 // ----------------------------------------------------
 // GET META: /meta/{md5}?fields=a&fields=b
 // ----------------------------------------------------
